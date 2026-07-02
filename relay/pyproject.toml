@@ -1,0 +1,11 @@
+[project]
+name = "maag-relay"
+version = "1.0.0"
+requires-python = ">=3.9"
+dependencies = [
+    "flask",
+    "yt-dlp",
+]
+
+[tool.vercel]
+entrypoint = "api.transcript:app"
