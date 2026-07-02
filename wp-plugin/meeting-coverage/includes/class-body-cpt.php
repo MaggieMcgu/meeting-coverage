@@ -84,10 +84,12 @@ class MAAG_Body_CPT {
         <p style="color:#666;margin-top:0">The post title above is the <strong>entity name</strong> (e.g. "Grand County Commission").</p>
         <table class="form-table">
             <tr>
-                <th style="width:200px"><label for="maag_channel_url">YouTube Channel URL <span style="color:red">*</span></label></th>
+                <th style="width:200px"><label for="maag_channel_url">YouTube Channel or Playlist URL <span style="color:red">*</span></label></th>
                 <td>
                     <input type="url" id="maag_channel_url" name="maag_channel_url" value="<?= esc_attr( $channel_url ) ?>" class="widefat">
-                    <p class="description">e.g. <code>https://www.youtube.com/@TownOfEstesPark</code> or <code>https://www.youtube.com/channel/UCxxxx</code></p>
+                    <p class="description">Channel: <code>https://www.youtube.com/@TownOfEstesPark</code> or <code>https://www.youtube.com/channel/UCxxxx</code><br>
+                    <strong>Playlist (recommended for mixed channels):</strong> <code>https://www.youtube.com/playlist?list=PLxxxx</code><br>
+                    ⚠️ Many government channels post both meeting recordings and other content. If your channel mixes content types, create a dedicated "Meetings" playlist on YouTube and use its URL here — otherwise the cron may pick up non-meeting videos.</p>
                 </td>
             </tr>
             <tr>
@@ -204,11 +206,7 @@ class MAAG_Body_CPT {
         $channel_url = get_post_meta( $body_id, '_maag_channel_url', true );
         if ( ! $channel_url ) return;
 
-        // Resolve channel ID (cached in meta)
-        $channel_id = $this->ensure_channel_id( $body_id, $channel_url );
-        if ( ! $channel_id ) return;
-
-        $video = MAAG_YouTube::get_latest_video( $channel_id );
+        $video = $this->get_latest_video_for_body( $body_id, $channel_url );
         if ( is_wp_error( $video ) ) {
             error_log( '[MAAG] Body #' . $body_id . ': ' . $video->get_error_message() );
             return;
@@ -247,13 +245,11 @@ class MAAG_Body_CPT {
             exit;
         }
 
-        $channel_id = $this->ensure_channel_id( $body_id, $channel_url );
-        if ( ! $channel_id ) {
+        $video = $this->get_latest_video_for_body( $body_id, $channel_url );
+        if ( ! $video ) {
             wp_redirect( add_query_arg( 'maag_msg', 'channel_error', $back ) );
             exit;
         }
-
-        $video = MAAG_YouTube::get_latest_video( $channel_id );
         if ( is_wp_error( $video ) ) {
             wp_redirect( add_query_arg( [ 'maag_msg' => 'rss_error', 'maag_err' => urlencode( $video->get_error_message() ) ], $back ) );
             exit;
@@ -345,6 +341,23 @@ class MAAG_Body_CPT {
 
     // -------------------------------------------------------------------------
     // Helpers
+
+    /**
+     * Route to playlist or channel RSS depending on the URL, return the latest video.
+     * Returns array or WP_Error; null if feed ID cannot be resolved.
+     */
+    private function get_latest_video_for_body( $body_id, $channel_url ) {
+        $playlist_id = MAAG_YouTube::extract_playlist_id( $channel_url );
+
+        if ( $playlist_id ) {
+            return MAAG_YouTube::get_latest_playlist_video( $playlist_id );
+        }
+
+        $channel_id = $this->ensure_channel_id( $body_id, $channel_url );
+        if ( ! $channel_id ) return null;
+
+        return MAAG_YouTube::get_latest_video( $channel_id );
+    }
 
     private function ensure_channel_id( $body_id, $channel_url ) {
         $channel_id = get_post_meta( $body_id, '_maag_resolved_channel_id', true );

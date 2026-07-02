@@ -49,6 +49,32 @@ class MAAG_YouTube {
     }
 
     /**
+     * Extract a playlist ID from a YouTube playlist URL.
+     *
+     * Returns playlist ID string (PLxxxx) or null if not a playlist URL.
+     * Known challenge: channels that mix meeting recordings with other content
+     * should use a dedicated meetings playlist URL here rather than the channel
+     * URL — the playlist feed only surfaces videos in that playlist.
+     */
+    public static function extract_playlist_id( $url ) {
+        if ( preg_match( '/[?&]list=(PL[a-zA-Z0-9_-]{10,})/', $url, $m ) ) {
+            return $m[1];
+        }
+        return null;
+    }
+
+    /**
+     * Fetch the latest video from a playlist's YouTube RSS feed.
+     *
+     * Returns array with keys: video_id, title, published (timestamp)
+     * or WP_Error on failure.
+     */
+    public static function get_latest_playlist_video( $playlist_id ) {
+        $rss_url = "https://www.youtube.com/feeds/videos.xml?playlist_id={$playlist_id}";
+        return self::fetch_latest_from_rss( $rss_url );
+    }
+
+    /**
      * Fetch the latest video from a channel's YouTube RSS feed.
      *
      * Returns array with keys: video_id, title, published (timestamp)
@@ -56,6 +82,13 @@ class MAAG_YouTube {
      */
     public static function get_latest_video( $channel_id ) {
         $rss_url  = "https://www.youtube.com/feeds/videos.xml?channel_id={$channel_id}";
+        return self::fetch_latest_from_rss( $rss_url );
+    }
+
+    /**
+     * Shared RSS parser — fetches and parses a YouTube RSS feed URL.
+     */
+    private static function fetch_latest_from_rss( $rss_url ) {
         $response = wp_remote_get( $rss_url, [
             'timeout'    => 15,
             'user-agent' => 'Mozilla/5.0 (compatible; MeetingCoverage/' . MAAG_VERSION . ')',
